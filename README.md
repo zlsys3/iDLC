@@ -1,4 +1,3 @@
-# iDLC
 # iDLC: Interpretable Deep Learning-based batch effect Correction and integration for Single-Cell Transcriptomic Data
 
 iDLC is a deep learning-based method for batch correction in single-cell RNA sequencing data, combining autoencoders with generative adversarial networks (GANs) for effective integration of multiple datasets.
