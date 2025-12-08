@@ -1,16 +1,14 @@
-# iDLC: Interpretable Deep Learning-based batch effect Correction and integration for Single-Cell Transcriptomic Data
+# iDLC - interpretable Dual-Level Correction
 
-iDLC is a deep learning-based method for batch correction in single-cell RNA sequencing data, combining autoencoders with generative adversarial networks (GANs) for effective integration of multiple datasets.
+A deep learning-based batch correction method for single-cell RNA-seq data using autoencoders and GANs.
 
 ## Features
+- Autoencoder for feature extraction
+- GAN-based batch correction
+- Memory-efficient processing
+- AnnData integration
 
-- **Deep Autoencoder**: Learns meaningful representations while separating batch effects from biological signals
-- **GAN-based Correction**: Uses generative adversarial networks for precise batch effect removal
-- **Mutual Nearest Neighbors**: Identifies biologically similar cells across batches
-- **Comprehensive Visualization**: Detailed loss tracking and training monitoring
-
-## Installation
-
-### From PyPI
+## Quick Start
 ```bash
-pip install idlc
+pip install -r requirements.txt
+python main.py
