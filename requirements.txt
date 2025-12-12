@@ -11,6 +11,5 @@ scib_metrics==0.5.7
 scipy==1.16.3
 scvi==0.6.8
 setuptools==80.9.0
-setuptools==78.1.1
 shap==0.50.0
 torch==2.7.1
