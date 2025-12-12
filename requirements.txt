@@ -3,7 +3,7 @@ annoy==1.17.3
 harmonypy==0.0.10
 matplotlib==3.10.8
 numpy==1.24.4
-omicverse==1.7.8
+omicverse==1.7.7
 pandas==2.3.3
 scanpy==1.11.5
 scib==1.1.7
