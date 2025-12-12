@@ -49,7 +49,7 @@ corrector = iDLCBatchCorrection(
 corrected_adata = corrector.correct(
     adata,
     batch_key='batch',  # Column name containing batch information
-    k=100,  # Number of neighbors for MNN search
+    k=20,  # Number of neighbors for MNN search
     save_dir="./corrected_results"
 )
 ```
