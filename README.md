@@ -23,7 +23,7 @@ iDLC (Interpretable Dual-Level Correction) provides a novel solution for integra
 git clone https://github.com/zlsys3/iDLC.git
 cd iDLC
 pip install -r requirements.txt
-
+```
 ## Quick Start
 
 ```python
@@ -52,3 +52,4 @@ corrected_adata = corrector.correct(
     k=100,  # Number of neighbors for MNN search
     save_dir="./corrected_results"
 )
+```
