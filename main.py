@@ -21,7 +21,7 @@ from idlc import iDLCBatchCorrection
 def main():
     # Read merged h5ad file containing all batch data
     print("Loading merged h5ad file...")
-    adata = sc.read_h5ad('data/Immune.h5ad')  # Replace with your file path
+    adata = sc.read_h5ad('your_data.h5ad')  # Replace with your file path
 
     print(f"Loaded data shape: {adata.shape}")
 
@@ -42,7 +42,7 @@ def main():
         adata,
         k=100,
         batch_key='Batch',  # Specify batch information column
-        save_dir="./correct_result/iImmune"
+        save_dir="./correct_result"
     )
 
     print("Batch correction completed!")
@@ -50,4 +50,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()
