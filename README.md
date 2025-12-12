@@ -13,10 +13,10 @@ iDLC (Interpretable Dual-Level Correction) provides a novel solution for integra
 ## Installation
 
 ### Requirements
-- Python 3.8+
-- PyTorch 1.10+
-- Scanpy 1.9+
-- Annoy 1.17+
+- Python 3.9+
+- PyTorch 2.7.1+
+- Scanpy 1.11.5+
+- Annoy 1.17.3+
 
 ### Install from source
 ```bash
