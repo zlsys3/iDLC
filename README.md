@@ -1,6 +1,6 @@
 # iDLC: Interpretable Dual-Level Correction for Single-Cell Data Integration
 
-An interpretable deep learning framework for batch correction in single-cell RNA sequencing (scRNA-seq) data that explicitly disentangles biological signals from technical noise through a structured dual-level approach.
+An interpretable deep learning framework for batch effect correction in single-cell RNA sequencing (scRNA-seq) data that explicitly disentangles biological signals from technical noise through a structured dual-level approach.
 
 ## Overview
 
