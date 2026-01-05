@@ -9,6 +9,7 @@ iDLC (Interpretable Dual-Level Correction) provides a novel solution for integra
 1. **Explicit Feature Disentanglement**: A structured residual autoencoder that explicitly separates biological content from batch-specific technical noise
 2. **Interpretable Correction**: Mutual Nearest Neighbor (MNN) pairs as interpretable bridges between biological feature learning and distribution alignment
 3. **Dual-Level Integration**: Sequential autoencoder-based feature disentanglement followed by GAN-based distribution correction
+4. **Optimal Transport Regularization**: Optional optimal transport loss for enhanced distribution matching
 
 ## Installation
 
@@ -50,6 +51,9 @@ corrected_adata = corrector.correct(
     adata,
     batch_key='batch',  # Column name containing batch information
     k=20,  # Number of neighbors for MNN search
-    save_dir="./corrected_results"
+    save_dir="./corrected_results",
+    use_ot=True,
+    ot_method='sinkhorn',
+    ot_weight=0.01
 )
 ```
