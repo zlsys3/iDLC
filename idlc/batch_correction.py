@@ -1,3 +1,4 @@
+# batch_correction.py
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -12,7 +13,8 @@ import scipy.sparse
 from .data_preprocessing import custom_data_preprocess
 from .models import iDLCAutoencoder
 from .losses import ImprovedLossRecorder, SimpleEarlyStopping
-from .training import train_gan, acquire_mnn_pairs
+
+from .training import train_gan, train_gan_with_ot, acquire_mnn_pairs
 
 warnings.filterwarnings('ignore')
 
@@ -66,9 +68,9 @@ class iDLCBatchCorrection:
         # Save preprocessing information
         self.hvg_indices = adata.var_names.tolist()
 
-        # Properly compute statistics for sparse matrices
+        # Correctly handle sparse matrix statistics calculation
         if hasattr(adata.X, 'toarray'):
-            print("Detected sparse matrix, converting to dense matrix for statistics calculation...")
+            print("Detected sparse matrix, converting to dense matrix for statistics...")
             dense_matrix = adata.X.toarray()
             self.scaler_mean = dense_matrix.mean(axis=0)
             self.scaler_std = dense_matrix.std(axis=0)
@@ -80,7 +82,7 @@ class iDLCBatchCorrection:
         # Avoid division by zero
         self.scaler_std = np.where(self.scaler_std == 0, 1, self.scaler_std)
 
-        # Get batch information - use the passed batch_key
+        # Get batch information - use the provided batch_key
         unique_batches = adata.obs[batch_key].unique()
         self.batch_info = {batch: idx for idx, batch in enumerate(unique_batches)}
         self.batch_num = len(self.batch_info)
@@ -100,7 +102,7 @@ class iDLCBatchCorrection:
 
         n_cells, n_genes = X.shape
 
-        # Get batch labels and map to numbers - use the passed batch_key
+        # Get batch labels and map to numbers - use provided batch_key
         batch_labels = adata.obs[batch_key].map(self.batch_info).values
 
         # Convert to one-hot encoding
@@ -146,7 +148,7 @@ class iDLCBatchCorrection:
                 # Forward pass
                 encoded, decoded, bio_part = self.autoencoder(x_batch)
 
-                # Split encoding results
+                # Split encoding result
                 batch_part = encoded[:, :self.batch_num]
 
                 # Calculate reconstruction loss
@@ -270,12 +272,13 @@ class iDLCBatchCorrection:
         print(f"Model loaded from {filepath}")
 
     def correct(self, adata: sc.AnnData, batch_key: str = 'batch', save_dir: str = None,
-                model_path: str = None, plot_loss: bool = True, k: int = 50) -> sc.AnnData:
+                model_path: str = None, plot_loss: bool = True, k: int = 50,
+                use_ot: bool = False, ot_method='mmd', ot_weight=0.1) -> sc.AnnData:
         """Main correction function - fully based on AnnData"""
 
         print("Starting batch correction pipeline...")
 
-        # If model path is provided, load the model
+        # If model path provided, load model
         if model_path and os.path.exists(model_path):
             print("Loading pre-trained model...")
             self.load_model(model_path)
@@ -290,19 +293,30 @@ class iDLCBatchCorrection:
             print("Training autoencoder...")
             self.train_autoencoder(adata_processed, batch_key)
 
-        print(f"Preprocessed data shape: {adata_processed.shape}")
+        print(f"Processed data shape: {adata_processed.shape}")
 
-        # Group by batch
+        # Ensure data is dense matrix
+        if hasattr(adata_processed.X, 'toarray'):
+            X_all = adata_processed.X.toarray().astype(np.float32)
+        else:
+            X_all = adata_processed.X.astype(np.float32)
+
+        # Extract latent representations for all cells
+        print("Extracting biological latent representations...")
+        all_latent = self.extract_features(X_all)
+        print(f"Latent representation shape: {all_latent.shape}")
+
+        # Group original data and latent representations by batch
         batch_groups = {}
+        latent_groups = {}
         unique_batches = adata_processed.obs[batch_key].unique()
 
         for batch in unique_batches:
             batch_mask = adata_processed.obs[batch_key] == batch
-            # Ensure conversion to dense matrix
-            if hasattr(adata_processed.X, 'toarray'):
-                batch_groups[batch] = adata_processed.X[batch_mask].toarray()
-            else:
-                batch_groups[batch] = adata_processed.X[batch_mask]
+            # Original data
+            batch_groups[batch] = X_all[batch_mask]
+            # Latent representations
+            latent_groups[batch] = all_latent[batch_mask]
 
         # Select reference batch
         ref_batch = max(batch_groups.keys(), key=lambda x: len(batch_groups[x]))
@@ -311,6 +325,7 @@ class iDLCBatchCorrection:
         # Correct each batch
         corrected_data = {}
         reference_set = batch_groups[ref_batch].copy()
+        reference_latent = latent_groups[ref_batch].copy()
 
         # Process reference batch
         corrected_data[ref_batch] = batch_groups[ref_batch]
@@ -321,8 +336,9 @@ class iDLCBatchCorrection:
         for batch in batches_to_correct:
             print(f"Correcting batch: {batch} relative to reference batch {ref_batch}")
 
-            # Search for MNN pairs
-            pairs = acquire_mnn_pairs(reference_set, batch_groups[batch], k=k)
+            # Use latent representations to search for MNN pairs
+            print("Searching for MNN pairs using latent representations...")
+            pairs = acquire_mnn_pairs(reference_latent, latent_groups[batch], k=k)
 
             if len(pairs) < 10:
                 print(f"Insufficient MNN pairs ({len(pairs)}), using direct correction")
@@ -337,19 +353,44 @@ class iDLCBatchCorrection:
                 datasetB = datasetB.astype(np.float32)
                 batch_groups_batch_float32 = batch_groups[batch].astype(np.float32)
 
-                # Train GAN
-                corrected_batch, _ = train_gan(
-                    datasetA,
-                    datasetB,
-                    batch_groups_batch_float32,  # Pass correctly typed data
-                    n_epochs=self.n_epochs_gan,
-                    batch_size=self.gan_batch_size,
-                    loss_recorder=self.loss_recorder
-                )
+                # Prepare latent representations for OT loss
+                latent_A = latent_groups[batch][[y for x, y in pairs]]
+                latent_B = reference_latent[[x for x, y in pairs]]
+
+                # Choose whether to use OT regularization
+                if use_ot:
+                    print(f"Using OT-regularized GAN for batch correction (method: {ot_method}, weight: {ot_weight})")
+                    corrected_batch, _ = train_gan_with_ot(
+                        datasetA,
+                        datasetB,
+                        batch_groups_batch_float32,
+                        n_epochs=self.n_epochs_gan,
+                        batch_size=self.gan_batch_size,
+                        loss_recorder=self.loss_recorder,
+                        ot_weight=ot_weight,
+                        ot_method=ot_method,
+                        autoencoder=self.autoencoder,  # Pass autoencoder
+                        latent_A=latent_A,  # Pass latent A
+                        latent_B=latent_B  # Pass latent B
+                    )
+                else:
+                    print("Using original GAN for batch correction")
+                    corrected_batch, _ = train_gan(
+                        datasetA,
+                        datasetB,
+                        batch_groups_batch_float32,
+                        n_epochs=self.n_epochs_gan,
+                        batch_size=self.gan_batch_size,
+                        loss_recorder=self.loss_recorder
+                    )
+
                 corrected_data[batch] = corrected_batch
 
-            # Update reference set
+            # Update reference set and latent representations
             reference_set = np.vstack([reference_set, corrected_data[batch]])
+            # Re-extract latent representations from corrected data
+            corrected_latent = self.extract_features(corrected_data[batch])
+            reference_latent = np.vstack([reference_latent, corrected_latent])
 
         # Merge all corrected data
         all_corrected = []
@@ -365,12 +406,12 @@ class iDLCBatchCorrection:
         corrected_matrix = np.vstack(all_corrected)
 
         print(f"Final corrected matrix shape: {corrected_matrix.shape}")
-        print(f"Final cell name count: {len(all_corrected_cell_names)}")
+        print(f"Final cell names count: {len(all_corrected_cell_names)}")
 
         # Final check
         if len(all_corrected_cell_names) != corrected_matrix.shape[0]:
             raise ValueError(
-                f"Cell name count ({len(all_corrected_cell_names)}) does not match data row count ({corrected_matrix.shape[0]})!")
+                f"Cell names count ({len(all_corrected_cell_names)}) doesn't match data row count ({corrected_matrix.shape[0]})!")
 
         # Create corrected AnnData object
         corrected_adata = sc.AnnData(
@@ -398,7 +439,7 @@ class iDLCBatchCorrection:
     def apply_preprocessing_to_adata(self, adata: sc.AnnData, batch_key: str = 'batch') -> sc.AnnData:
         """Apply preprocessing to new data"""
         if self.hvg_indices is None:
-            raise ValueError("Preprocessing parameters not available. Please train or load a model first.")
+            raise ValueError("Preprocessing parameters not available. Please train or load model first.")
 
         print("Applying preprocessing to new data...")
 
@@ -406,7 +447,7 @@ class iDLCBatchCorrection:
         common_genes = adata.var_names.intersection(self.hvg_indices)
         adata_filtered = adata[:, common_genes]
 
-        # Add missing highly variable genes (fill with 0)
+        # Add missing highly variable genes (filled with 0)
         missing_genes = set(self.hvg_indices) - set(common_genes)
         if missing_genes:
             print(f"Adding {len(missing_genes)} missing genes (filled with 0)")
@@ -424,7 +465,7 @@ class iDLCBatchCorrection:
             adata_processed.var_names = self.hvg_indices
         else:
             adata_processed = adata_filtered.copy()
-            # Ensure consistent gene order
+            # Ensure gene order consistency
             adata_processed = adata_processed[:, self.hvg_indices]
 
         # Apply same preprocessing
@@ -451,26 +492,10 @@ class iDLCBatchCorrection:
         h5ad_path = os.path.join(output_dir, "corrected_data.h5ad")
         corrected_adata.write(h5ad_path)
 
-        # Also save CSV format as backup
-        # csv_path = os.path.join(output_dir, "corrected_data.csv")
-        # if hasattr(corrected_adata.X, 'toarray'):
-        #     corrected_df = pd.DataFrame(
-        #         corrected_adata.X.toarray(),
-        #         index=corrected_adata.obs_names,
-        #         columns=corrected_adata.var_names
-        #     )
-        # else:
-        #     corrected_df = pd.DataFrame(
-        #         corrected_adata.X,
-        #         index=corrected_adata.obs_names,
-        #         columns=corrected_adata.var_names
-        #     )
-        # corrected_df.to_csv(csv_path)
-
         # Save batch information - using correct batch key
         batch_df = pd.DataFrame({
             'cell': corrected_adata.obs_names,
-            batch_key: corrected_adata.obs[batch_key]  # Use passed batch key
+            batch_key: corrected_adata.obs[batch_key]  # Use provided batch key
         })
         batch_df.to_csv(os.path.join(output_dir, "batch_info.csv"), index=False)
 

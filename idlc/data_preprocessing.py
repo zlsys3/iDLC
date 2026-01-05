@@ -1,3 +1,4 @@
+# data_preprocessing.py
 import numpy as np
 import scanpy as sc
 import warnings
@@ -8,7 +9,7 @@ warnings.filterwarnings('ignore')
 
 def custom_data_preprocess(adata, key='batch', n_top_genes=2000, flavor='seurat_v3',
                            min_genes=200, min_cells=3):
-    """Data preprocessing with memory optimization"""
+    """Data preprocessing - with memory optimization"""
 
     print(f"Starting preprocessing, initial data shape: {adata.shape}")
 
@@ -20,7 +21,7 @@ def custom_data_preprocess(adata, key='batch', n_top_genes=2000, flavor='seurat_
         del adata.raw
     gc.collect()
 
-    # Quality control in chunks
+    # Perform quality control in chunks
     print("Performing quality control...")
     sc.pp.filter_cells(adata, min_genes=min_genes)
     sc.pp.filter_genes(adata, min_cells=min_cells)
@@ -30,7 +31,7 @@ def custom_data_preprocess(adata, key='batch', n_top_genes=2000, flavor='seurat_
     if len(adata.obs_names) != len(original_obs_names):
         print(f"Note: Cell count changed from {len(original_obs_names)} to {len(adata.obs_names)}")
 
-    # Use sparse matrices to save memory
+    # Use sparse matrix to save memory
     if not scipy.sparse.issparse(adata.X):
         adata.X = scipy.sparse.csr_matrix(adata.X)
 
