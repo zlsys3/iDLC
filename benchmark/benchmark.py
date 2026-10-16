@@ -96,7 +96,7 @@ if scdreamer_mat.shape[0] != adata.n_obs:
 adata.obsm['scDREAMER'] = scdreamer_mat
 
 # iDLC
-idlc_path = f'/path/to/OT/correct_result/{file_name}/corrected_data.h5ad'
+idlc_path = f'/path/to/iDLC/correct_result/{file_name}/corrected_data.h5ad'
 corrected_idlc = sc.read_h5ad(idlc_path)
 common = adata.obs_names.intersection(corrected_idlc.obs_names)
 print(f"iDLC shared cells: {len(common)}")
@@ -106,7 +106,7 @@ sc.pp.pca(corrected_idlc, n_comps=50, random_state=42)
 adata.obsm['iDLC'] = corrected_idlc.obsm['X_pca']
 
 # scPoli
-scpoli_path = f'/path/to/OT/scpoli/{file_name}/adata.h5ad'
+scpoli_path = f'/path/to/iDLC/scpoli/{file_name}/adata.h5ad'
 scpoli_adata = sc.read_h5ad(scpoli_path)
 print(f"scPoli data shape: {scpoli_adata.shape}")
 common = adata.obs_names.intersection(scpoli_adata.obs_names)
